@@ -3,7 +3,16 @@
 App web para llevar las materias, las notas y el promedio del semestre (ponderado por créditos).
 Funciona en el PC y en el celular, y se sincroniza cifrada con un repo privado de GitHub, igual que la app de finanzas.
 
-**Versión 0.1.0: Fase 1** (materias, trabajos con porcentaje, notas, créditos, promedio, tema y paletas).
+**Versión 0.2.0: Fases 1 y 2**
+- **Tareas:** cosas por hacer agrupadas por día (Atrasadas, Hoy, Mañana…), con fecha escrita en palabras ("viernes 3pm", "15 dic"), prioridad 1–3, recordatorio y destino: Bandeja, tus listas propias o una materia.
+- **Entregas y parciales:** una tarea de una materia se puede ligar a uno de sus trabajos. Cuando pones la nota en la tarea, aparece también en Notas.
+- **Calendario:** vistas de mes, semana y día, con tareas y clases. Arrastra una tarea a otro día u otra hora; toca un hueco para crear una.
+- **Horario:** clases semanales por materia (salón, tipo).
+- **Recordatorios:** avisan con la app abierta o instalada. Para avisos seguros, exporta un **.ics** al calendario del celular (Ajustes o Calendario).
+- **Notas:** materias, trabajos con porcentaje, notas, créditos y promedio del semestre ponderado por créditos.
+- Tema claro u oscuro y 7 paletas.
+
+**Actualizar desde la 0.1.0:** reemplaza los archivos del repo `semestre-app` por los de esta carpeta. Tus datos se convierten solos al formato nuevo la primera vez que abras la app.
 
 ## Publicarla (una sola vez)
 
@@ -36,8 +45,14 @@ Las notas se escriben con coma o punto (`4,5` o `4.5`). Escribir `45` también s
 ```
 index.html
 css/estilos.css
-js/app.js            ← la app de semestre
-js/calculos.js       ← cálculos de notas (sin interfaz, probados por separado)
+js/app.js            ← arranque, pestañas, sincronización y ajustes
+js/nucleo.js         ← estado y utilidades compartidas
+js/vistas/           ← pestañas: tareas.js, calendario.js, notas.js
+js/componentes/      ← editor de tareas y menús flotantes
+js/calculos.js       ← cálculos de notas (probados por separado)
+js/fechas.js         ← fechas en español: "mañana", "viernes 3pm", "15 dic"… (probado)
+js/ics.js            ← exportación a calendario (probado)
+js/recordatorios.js  ← avisos
 js/comun/            ← MÓDULO COMÚN: se copia tal cual a las demás apps
   sync.js            ← sincronización local + GitHub, detección de conflictos
   cifrado.js         ← AES-GCM 256 + PBKDF2, con compresión gzip

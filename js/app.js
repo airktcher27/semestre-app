@@ -1,12 +1,15 @@
-// Semestre · Fase 1: materias, notas, créditos, tema y paletas
+// Semestre · arranque, pestañas, sincronización y ajustes
 import { crearSincronizador, ESTADOS } from "./comun/sync.js";
 import {
-  resumenMateria, resumenSemestre, estadoMateria,
-  formatoNota, formatoPorcentaje, interpretarNota, interpretarPorcentaje,
-} from "./calculos.js";
-
-const VERSION = "0.1.0";
-const ESQUEMA = 1;
+  VERSION, ESQUEMA, estado, ganchos, $, escapar, nuevoId, clonar, semestre, toast,
+  antesDeCambio, tomarAnterior, olvidarAnterior, preferencia, guardarPreferencia, COLORES,
+} from "./nucleo.js";
+import { interpretarNota } from "./calculos.js";
+import { pintarNotas, iniciarNotas, notaEditable } from "./vistas/notas.js";
+import { pintarTareas, iniciarTareas } from "./vistas/tareas.js";
+import { pintarCalendario, iniciarCalendario, exportarICS } from "./vistas/calendario.js";
+import { iniciarRecordatorios, estadoPermiso, pedirPermisoNotificaciones } from "./recordatorios.js";
+import { cerrarPopover } from "./componentes/popover.js";
 
 const PALETAS = [
   { id: "tomate", nombre: "Tomate", color: "#dc4c3e" },
@@ -18,114 +21,111 @@ const PALETAS = [
   { id: "grafito", nombre: "Grafito", color: "#55606e" },
 ];
 
-const COLORES_MATERIA = [
-  "#dc4c3e", "#e8833a", "#d9a21b", "#7cb342", "#2f9e6a", "#159ba3",
-  "#2b7fc4", "#5b5fd6", "#9b4fb8", "#c2458b", "#8d6e63", "#6b7280",
-];
-
-const ETIQUETA_ESTADO = { bien: "Vas bien", cuidado: "Cerca del límite", riesgo: "Por debajo", "sin-notas": "Sin notas" };
-
-// ---------- utilidades ----------
-const $ = (sel, raiz = document) => raiz.querySelector(sel);
-const id = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
-const clonar = (o) => JSON.parse(JSON.stringify(o));
-
-function escapar(texto) {
-  return String(texto ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-}
-
-// 4 → "4,0" · 3.85 → "3,85"
-function notaEditable(n) {
-  return (Number.isInteger(n) ? n.toFixed(1) : String(n)).replace(".", ",");
-}
-
+// ---------- datos ----------
 function nombreSemestreActual(fecha = new Date()) {
   return `${fecha.getFullYear()}-${fecha.getMonth() < 6 ? 1 : 2}`;
 }
 
+function semestreVacio(nombre = nombreSemestreActual()) {
+  return { id: nuevoId(), nombre, creado: new Date().toISOString(), materias: [], horario: [] };
+}
+
 function datosIniciales() {
-  const s = { id: id(), nombre: nombreSemestreActual(), creado: new Date().toISOString(), materias: [] };
+  const s = semestreVacio();
   return {
     esquema: ESQUEMA,
     ajustes: { notaAprobacion: 3.0, tema: "auto", paleta: "tomate" },
     semestres: [s],
     semestreActivo: s.id,
+    listas: [{ id: nuevoId(), nombre: "Personal", color: COLORES[7] }],
+    tareas: [],
   };
 }
 
-// Completa campos que falten (datos viejos o respaldos de otra versión).
+// Completa lo que falte (datos de la versión 0.1, respaldos viejos, etc.).
 function normalizar(d) {
   if (!d || typeof d !== "object" || !Array.isArray(d.semestres)) return datosIniciales();
-  d.esquema = ESQUEMA;
   d.ajustes = { notaAprobacion: 3.0, tema: "auto", paleta: "tomate", ...(d.ajustes || {}) };
-  if (d.semestres.length === 0) d.semestres.push({ id: id(), nombre: nombreSemestreActual(), creado: new Date().toISOString(), materias: [] });
+  if (d.semestres.length === 0) d.semestres.push(semestreVacio());
   for (const s of d.semestres) {
     s.materias ||= [];
+    s.horario ||= [];
     for (const m of s.materias) {
       m.trabajos ||= [];
-      m.color ||= COLORES_MATERIA[0];
+      m.color ||= COLORES[0];
     }
   }
+  if (!Array.isArray(d.listas)) d.listas = [{ id: nuevoId(), nombre: "Personal", color: COLORES[7] }];
+  if (!Array.isArray(d.tareas)) d.tareas = [];
+  for (const t of d.tareas) {
+    t.destino ||= { tipo: "bandeja" };
+    t.prioridad ||= 4;
+    t.recordatorio ??= null;
+    t.evaluacion ??= null;
+    t.descripcion ??= "";
+  }
   if (!d.semestres.some((s) => s.id === d.semestreActivo)) d.semestreActivo = d.semestres[d.semestres.length - 1].id;
+  d.esquema = ESQUEMA;
   return d;
 }
 
-// ---------- estado ----------
-let datos;
-const abiertas = new Set(JSON.parse(localStorage.getItem("semestre:abiertas") || "[]"));
-
 const sync = crearSincronizador({
   app: "semestre",
-  alCambiar: ({ estado, mensaje, datosCambiaron }) => {
+  alCambiar: ({ estado: e, mensaje, datosCambiaron }) => {
     if (datosCambiaron) {
-      datos = normalizar(clonar(sync.datos));
+      estado.datos = normalizar(clonar(sync.datos));
       aplicarApariencia();
       pintar();
     }
-    pintarEstadoSync(estado, mensaje);
-    if (estado === ESTADOS.CONFLICTO) abrirConflicto();
+    pintarEstadoSync(e, mensaje);
+    if (e === ESTADOS.CONFLICTO) abrirConflicto();
   },
 });
 
-function semestre() {
-  return datos.semestres.find((s) => s.id === datos.semestreActivo);
-}
-
-function buscarMateria(idMateria) {
-  return semestre().materias.find((m) => m.id === idMateria);
-}
-
-let anterior = null; // para "Deshacer"
 function guardar({ deshacible = false } = {}) {
-  sync.guardar(clonar(datos));
-  if (!deshacible) anterior = null;
-}
-
-function antesDeCambio() {
-  anterior = clonar(datos);
+  sync.guardar(clonar(estado.datos));
+  if (!deshacible) olvidarAnterior();
 }
 
 // ---------- apariencia ----------
 function aplicarApariencia() {
-  const { tema, paleta } = datos.ajustes;
+  const { tema, paleta } = estado.datos.ajustes;
   const real = tema === "claro" || tema === "oscuro" ? tema : matchMedia("(prefers-color-scheme: light)").matches ? "claro" : "oscuro";
   document.documentElement.dataset.tema = real;
   document.documentElement.dataset.paleta = paleta;
   $('meta[name="theme-color"]').setAttribute("content", real === "claro" ? "#f6f6f4" : "#1e1e1e");
-  localStorage.setItem("semestre:apariencia", JSON.stringify({ tema, paleta }));
+  try { localStorage.setItem("semestre:apariencia", JSON.stringify({ tema, paleta })); } catch {}
 }
-matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => datos && aplicarApariencia());
+matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => estado.datos && aplicarApariencia());
+
+// ---------- pestañas ----------
+const VISTAS = ["tareas", "calendario", "notas"];
+let vista = VISTAS.includes(location.hash.slice(1)) ? location.hash.slice(1) : preferencia("vista", "tareas");
+
+function cambiarVista(nueva) {
+  if (!VISTAS.includes(nueva)) return;
+  vista = nueva;
+  guardarPreferencia("vista", vista);
+  if (location.hash !== `#${vista}`) history.replaceState(null, "", `#${vista}`);
+  cerrarPopover();
+  pintar();
+  window.scrollTo(0, 0);
+}
+
+window.addEventListener("hashchange", () => cambiarVista(location.hash.slice(1)));
 
 // ---------- pintar ----------
 function pintar() {
-  // Conserva el foco y la posición del cursor al volver a pintar.
   const activo = document.activeElement;
   const claveFoco = activo?.dataset?.foco;
   const seleccion = claveFoco && "selectionStart" in activo ? [activo.selectionStart, activo.selectionEnd] : null;
 
+  for (const v of VISTAS) $(`#vista-${v}`).classList.toggle("oculto", v !== vista);
+  document.querySelectorAll("[data-vista]").forEach((b) => b.setAttribute("aria-current", b.dataset.vista === vista ? "page" : "false"));
   pintarSelectorSemestre();
-  pintarResumen();
-  pintarMaterias();
+  if (vista === "tareas") pintarTareas();
+  else if (vista === "calendario") pintarCalendario();
+  else pintarNotas();
 
   if (claveFoco) {
     const el = document.querySelector(`[data-foco="${CSS.escape(claveFoco)}"]`);
@@ -138,99 +138,10 @@ function pintar() {
 
 function pintarSelectorSemestre() {
   const sel = $("#selector-semestre");
+  const d = estado.datos;
   sel.innerHTML =
-    datos.semestres.map((s) => `<option value="${s.id}" ${s.id === datos.semestreActivo ? "selected" : ""}>${escapar(s.nombre)}</option>`).join("") +
+    d.semestres.map((s) => `<option value="${s.id}" ${s.id === d.semestreActivo ? "selected" : ""}>${escapar(s.nombre)}</option>`).join("") +
     `<option value="__nuevo">+ Nuevo semestre…</option>`;
-}
-
-function pintarResumen() {
-  const r = resumenSemestre(semestre());
-  const aprob = datos.ajustes.notaAprobacion;
-  let estado = "sin-notas";
-  if (r.promedio !== null) estado = estadoMateria({ promedioEvaluado: r.promedio }, aprob);
-  const detalleProm = r.promedio === null
-    ? "Aparece cuando califiquen algo"
-    : `Ponderado por créditos · ${r.creditosConNota} de ${r.creditosTotales} créditos con notas`;
-  $("#resumen").innerHTML = `
-    <div class="tarjeta-dato destacada">
-      <div class="etiqueta">Promedio del semestre</div>
-      <div class="valor" style="${r.promedio !== null ? `color:var(--${estado})` : ""}">${formatoNota(r.promedio)}</div>
-      <div class="detalle">${detalleProm}</div>
-    </div>
-    <div class="tarjeta-dato"><div class="etiqueta">Materias</div><div class="valor">${r.materias}</div>
-      <div class="detalle">${r.completas} con todas las notas</div></div>
-    <div class="tarjeta-dato"><div class="etiqueta">Créditos</div><div class="valor">${r.creditosTotales}</div>
-      <div class="detalle">${r.sinCreditos ? `${r.sinCreditos} materia(s) sin créditos` : "inscritos"}</div></div>
-    <div class="tarjeta-dato"><div class="etiqueta">Para aprobar</div><div class="valor">${formatoNota(aprob, 1)}</div>
-      <div class="detalle">Cámbialo en Ajustes</div></div>`;
-  $("#contador-materias").textContent = r.materias ? `${r.materias}` : "";
-}
-
-function pintarMaterias() {
-  const cont = $("#materias");
-  const materias = semestre().materias;
-  if (materias.length === 0) {
-    cont.innerHTML = `<div class="vacio" style="grid-column:1/-1">
-      <h2>Agrega tus materias</h2>
-      <p>Para cada una pones sus créditos y después los trabajos con su porcentaje.<br>Las notas las vas llenando a medida que te califican.</p>
-      <button class="boton primario" data-accion="nueva-materia">+ Agregar materia</button></div>`;
-    return;
-  }
-  cont.innerHTML = materias.map(htmlMateria).join("") + `<button class="materia-nueva" data-accion="nueva-materia">+ Agregar materia</button>`;
-}
-
-function htmlMateria(m) {
-  const r = resumenMateria(m);
-  const estado = estadoMateria(r, datos.ajustes.notaAprobacion);
-  const abierta = abiertas.has(m.id) || m.trabajos.length === 0;
-  const meta = [m.codigo, `${m.creditos || 0} crédito${Number(m.creditos) === 1 ? "" : "s"}`, m.docente].filter(Boolean).map(escapar).join(" · ");
-
-  let alerta = "";
-  if (m.trabajos.length && !r.sumaCorrecta) {
-    const dif = Math.round((100 - r.porcentajeTotal) * 100) / 100;
-    alerta = `<div class="alerta-suma">Los porcentajes suman ${formatoPorcentaje(r.porcentajeTotal)}: ${dif > 0 ? `faltan ${formatoPorcentaje(dif)}` : `sobran ${formatoPorcentaje(-dif)}`}.</div>`;
-  }
-
-  const filas = m.trabajos.map((t) => `
-    <div class="fila-trabajo" data-trabajo="${t.id}">
-      <input class="campo-celda" data-campo="nombre" data-foco="${t.id}:nombre" value="${escapar(t.nombre)}" placeholder="Nombre del trabajo" aria-label="Nombre del trabajo" maxlength="80">
-      <input class="campo-celda numero" data-campo="porcentaje" data-foco="${t.id}:porcentaje" value="${t.porcentaje ?? ""}" inputmode="decimal" aria-label="Porcentaje" placeholder="%">
-      <input class="campo-celda numero nota-vacia" data-campo="nota" data-foco="${t.id}:nota" value="${t.nota === null || t.nota === undefined ? "" : notaEditable(t.nota)}" inputmode="decimal" aria-label="Nota" placeholder="—">
-      <button class="boton-quitar" data-accion="quitar-trabajo" title="Quitar trabajo" aria-label="Quitar ${escapar(t.nombre)}">×</button>
-    </div>`).join("");
-
-  return `
-  <article class="materia ${abierta ? "abierta" : ""}" data-materia="${m.id}" style="--color-materia:${m.color};--color-estado:var(--${estado})">
-    <div class="materia-cabeza">
-      <div class="materia-titulo">
-        <h3>${escapar(m.nombre)}</h3>
-        <div class="meta">${meta}</div>
-      </div>
-      <button class="boton fantasma boton-icono" data-accion="editar-materia" title="Editar materia" aria-label="Editar ${escapar(m.nombre)}">✎</button>
-    </div>
-    <div class="materia-notas">
-      <div><div class="nota-etiqueta">Acumulada</div><div class="nota-grande">${formatoNota(r.acumulada)}</div></div>
-      <div><div class="nota-etiqueta">Sobre lo evaluado</div><div class="nota-chica">${formatoNota(r.promedioEvaluado)}</div></div>
-      <span class="chip-estado" data-estado="${estado}">${ETIQUETA_ESTADO[estado]}</span>
-    </div>
-    <div class="barra-progreso">
-      <div class="barra-pista" role="progressbar" aria-valuenow="${r.evaluado}" aria-valuemin="0" aria-valuemax="100" aria-label="Porcentaje evaluado">
-        <div class="barra-relleno" style="width:${Math.min(100, r.evaluado)}%"></div>
-      </div>
-      <div class="barra-leyenda"><span>${formatoPorcentaje(r.evaluado)} evaluado</span><span>${formatoPorcentaje(r.pendiente)} pendiente</span></div>
-    </div>
-    ${alerta}
-    <div class="trabajos">
-      <button class="trabajos-alternar" data-accion="alternar">
-        <span class="flecha">›</span> Trabajos <span style="color:var(--texto-3)">${r.calificados}/${r.trabajos} calificados</span>
-      </button>
-      <div class="trabajos-lista">
-        ${m.trabajos.length ? `<div class="fila-encabezado"><span>Trabajo</span><span>%</span><span>Nota</span><span></span></div>` : ""}
-        ${filas}
-        <button class="agregar-trabajo" data-accion="agregar-trabajo"><span class="mas">+</span> Agregar trabajo</button>
-      </div>
-    </div>
-  </article>`;
 }
 
 // ---------- estado de sincronización ----------
@@ -245,225 +156,96 @@ const TEXTO_SYNC = {
   [ESTADOS.SIN_CONEXION]: "Sin conexión",
 };
 
-function pintarEstadoSync(estado, mensaje) {
+function pintarEstadoSync(e, mensaje) {
   const b = $("#boton-sync");
-  b.dataset.estado = estado;
-  $(".texto", b).textContent = TEXTO_SYNC[estado] || estado;
-  b.title = mensaje || TEXTO_SYNC[estado] || "";
-
+  b.dataset.estado = e;
+  $(".texto", b).textContent = TEXTO_SYNC[e] || e;
+  b.title = mensaje || TEXTO_SYNC[e] || "";
   const avisos = $("#avisos");
-  if (estado === ESTADOS.ERROR) {
+  if (e === ESTADOS.ERROR) {
     avisos.innerHTML = `<div class="aviso alerta"><p><b>No se pudo sincronizar.</b> ${escapar(mensaje)} Tus cambios siguen guardados en este dispositivo.</p>
-      <button class="boton" data-accion="reintentar">Reintentar</button></div>`;
-  } else if (estado === ESTADOS.BLOQUEADO) {
+      <button class="boton" data-accion-app="reintentar">Reintentar</button></div>`;
+  } else if (e === ESTADOS.BLOQUEADO) {
     avisos.innerHTML = `<div class="aviso alerta"><p>${escapar(mensaje || "Escribe tu contraseña de cifrado para sincronizar en este dispositivo.")}</p>
-      <button class="boton primario" data-accion="desbloquear">Escribir contraseña</button></div>`;
-  } else if (estado === ESTADOS.SIN_CONFIGURAR && !localStorage.getItem("semestre:aviso-sync-oculto")) {
+      <button class="boton primario" data-accion-app="desbloquear">Escribir contraseña</button></div>`;
+  } else if (e === ESTADOS.SIN_CONFIGURAR && !preferencia("aviso-sync-oculto", false)) {
     avisos.innerHTML = `<div class="aviso"><p>Tus datos están guardados solo en este dispositivo. Conecta tu repo privado de GitHub para tenerlos también en el celular.</p>
-      <button class="boton primario" data-accion="conectar">Conectar</button>
-      <button class="boton fantasma" data-accion="ocultar-aviso-sync">Después</button></div>`;
-  } else {
-    avisos.innerHTML = "";
-  }
+      <button class="boton primario" data-accion-app="conectar">Conectar</button>
+      <button class="boton fantasma" data-accion-app="ocultar-aviso-sync">Después</button></div>`;
+  } else avisos.innerHTML = "";
   if ($("#dialogo-ajustes").open) pintarAjustesSync();
 }
 
 // ---------- toast ----------
 let temporizadorToast;
-function toast(texto, { deshacer = false } = {}) {
+function mostrarToast(texto, { deshacer = false } = {}) {
   document.querySelector(".toast")?.remove();
   const t = document.createElement("div");
   t.className = "toast";
+  t.setAttribute("role", "status");
   t.innerHTML = `<span>${escapar(texto)}</span>${deshacer ? `<button>Deshacer</button>` : ""}`;
   if (deshacer) {
     $("button", t).onclick = () => {
-      if (anterior) {
-        datos = anterior;
-        anterior = null;
+      const a = tomarAnterior();
+      if (a) {
+        estado.datos = a;
         guardar();
         pintar();
       }
       t.remove();
     };
   }
-  document.body.append(t);
+  (document.querySelector("dialog[open]") || document.body).append(t);
   clearTimeout(temporizadorToast);
-  temporizadorToast = setTimeout(() => t.remove(), deshacer ? 6000 : 3000);
+  temporizadorToast = setTimeout(() => t.remove(), deshacer ? 6000 : 3500);
 }
 
-// ---------- materias ----------
-let materiaEditando = null;
-let colorElegido = COLORES_MATERIA[0];
-
-function abrirMateria(idMateria = null) {
-  materiaEditando = idMateria;
-  const f = $("#form-materia");
-  f.reset();
-  $("#error-materia").textContent = "";
-  const m = idMateria ? buscarMateria(idMateria) : null;
-  $("#titulo-materia").textContent = m ? "Editar materia" : "Nueva materia";
-  $("#boton-borrar-materia").classList.toggle("oculto", !m);
-  if (m) {
-    f.nombre.value = m.nombre;
-    f.docente.value = m.docente || "";
-    f.creditos.value = m.creditos || "";
-    f.codigo.value = m.codigo || "";
-    colorElegido = m.color;
-  } else {
-    const usados = new Set(semestre().materias.map((x) => x.color));
-    colorElegido = COLORES_MATERIA.find((c) => !usados.has(c)) || COLORES_MATERIA[0];
-  }
-  pintarColores();
-  $("#dialogo-materia").showModal();
-  f.nombre.focus();
-}
-
-function pintarColores() {
-  $("#colores-materia").innerHTML = COLORES_MATERIA.map(
-    (c) => `<button type="button" class="color-opcion" style="background:${c}" data-color="${c}" aria-pressed="${c === colorElegido}" aria-label="Color ${c}"></button>`
-  ).join("");
-}
-
-$("#colores-materia").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-color]");
-  if (!b) return;
-  colorElegido = b.dataset.color;
-  pintarColores();
-});
-
-$("#form-materia").addEventListener("submit", (e) => {
-  const f = e.target;
-  const nombre = f.nombre.value.trim();
-  const creditos = parseInt(f.creditos.value, 10);
-  if (!nombre) { e.preventDefault(); $("#error-materia").textContent = "Ponle nombre a la materia."; return; }
-  if (!(creditos >= 1 && creditos <= 20)) { e.preventDefault(); $("#error-materia").textContent = "Los créditos deben ser un número entre 1 y 20."; return; }
-  const valores = { nombre, docente: f.docente.value.trim(), creditos, codigo: f.codigo.value.trim(), color: colorElegido };
-  if (materiaEditando) {
-    Object.assign(buscarMateria(materiaEditando), valores);
-  } else {
-    const nueva = { id: id(), ...valores, trabajos: [] };
-    semestre().materias.push(nueva);
-    abiertas.add(nueva.id);
-    guardarAbiertas();
-  }
-  guardar();
-  pintar();
-});
-
-$("#boton-borrar-materia").addEventListener("click", () => {
-  const m = buscarMateria(materiaEditando);
-  if (!m) return;
-  antesDeCambio();
-  semestre().materias = semestre().materias.filter((x) => x.id !== m.id);
-  guardar({ deshacible: true });
-  $("#dialogo-materia").close();
-  pintar();
-  toast(`Borraste "${m.nombre}"`, { deshacer: true });
-});
-
-function guardarAbiertas() {
-  localStorage.setItem("semestre:abiertas", JSON.stringify([...abiertas]));
-}
-
-// ---------- trabajos (edición en la tarjeta) ----------
-$("#materias").addEventListener("change", (e) => {
-  const input = e.target.closest("[data-campo]");
-  if (!input) return;
-  const m = buscarMateria(input.closest("[data-materia]").dataset.materia);
-  const t = m?.trabajos.find((x) => x.id === input.closest("[data-trabajo]").dataset.trabajo);
-  if (!t) return;
-  const campo = input.dataset.campo;
-
-  if (campo === "nombre") {
-    t.nombre = input.value.trim() || "Trabajo";
-  } else if (campo === "porcentaje") {
-    const r = interpretarPorcentaje(input.value);
-    if (!r.ok) { input.classList.add("invalido"); toast(r.error); return; }
-    t.porcentaje = r.valor;
-  } else if (campo === "nota") {
-    const r = interpretarNota(input.value);
-    if (!r.ok) { input.classList.add("invalido"); toast(r.error); return; }
-    t.nota = r.valor;
-  }
-  input.classList.remove("invalido");
-  guardar();
-  pintar();
-});
-
-$("#materias").addEventListener("keydown", (e) => {
-  // Enter en una celda pasa a la siguiente (como en una hoja de cálculo).
-  if (e.key !== "Enter" || !e.target.matches(".campo-celda")) return;
-  e.preventDefault();
-  const celdas = [...e.target.closest(".trabajos-lista").querySelectorAll(".campo-celda")];
-  const i = celdas.indexOf(e.target);
-  e.target.blur();
-  const siguiente = document.querySelector(`[data-foco="${CSS.escape(celdas[i + 1]?.dataset.foco || "")}"]`);
-  (siguiente || e.target).focus();
-});
+ganchos.guardar = guardar;
+ganchos.pintar = pintar;
+ganchos.toast = mostrarToast;
 
 // ---------- clics generales ----------
 document.addEventListener("click", (e) => {
-  const b = e.target.closest("[data-accion]");
+  const nav = e.target.closest("[data-vista]");
+  if (nav) { e.preventDefault(); cambiarVista(nav.dataset.vista); return; }
+  const b = e.target.closest("[data-accion-app]");
   if (b) {
-    const tarjeta = b.closest("[data-materia]");
-    const m = tarjeta ? buscarMateria(tarjeta.dataset.materia) : null;
-    switch (b.dataset.accion) {
-      case "nueva-materia": abrirMateria(); break;
-      case "editar-materia": abrirMateria(m.id); break;
-      case "alternar":
-        abiertas.has(m.id) ? abiertas.delete(m.id) : abiertas.add(m.id);
-        guardarAbiertas();
-        tarjeta.classList.toggle("abierta");
-        break;
-      case "agregar-trabajo": {
-        const r = resumenMateria(m);
-        const sugerido = r.porcentajeTotal < 100 ? Math.round((100 - r.porcentajeTotal) * 100) / 100 : 10;
-        const t = { id: id(), nombre: `Trabajo ${m.trabajos.length + 1}`, porcentaje: sugerido, nota: null };
-        m.trabajos.push(t);
-        abiertas.add(m.id);
-        guardar();
-        pintar();
-        const campo = document.querySelector(`[data-foco="${t.id}:nombre"]`);
-        campo?.focus();
-        campo?.select();
-        break;
-      }
-      case "quitar-trabajo": {
-        const idT = b.closest("[data-trabajo]").dataset.trabajo;
-        const t = m.trabajos.find((x) => x.id === idT);
-        antesDeCambio();
-        m.trabajos = m.trabajos.filter((x) => x.id !== idT);
-        guardar({ deshacible: true });
-        pintar();
-        toast(`Quitaste "${t.nombre}"`, { deshacer: true });
-        break;
-      }
+    switch (b.dataset.accionApp) {
       case "conectar": abrirConectar(); break;
       case "desbloquear": abrirDesbloquear(); break;
-      case "reintentar": sync.sincronizar(); break;
-      case "ocultar-aviso-sync":
-        localStorage.setItem("semestre:aviso-sync-oculto", "1");
-        $("#avisos").innerHTML = "";
-        break;
-      case "sincronizar-ya": sync.sincronizar(); break;
+      case "reintentar": case "sincronizar-ya": sync.sincronizar(); break;
+      case "ocultar-aviso-sync": guardarPreferencia("aviso-sync-oculto", true); $("#avisos").innerHTML = ""; break;
       case "desconectar":
         if (confirm("¿Desconectar este dispositivo de GitHub? Los datos siguen aquí y en GitHub; solo deja de sincronizar.")) sync.desconectar();
         break;
+      case "notificaciones":
+        pedirPermisoNotificaciones().then(pintarAjustesNotificaciones);
+        break;
+      case "exportar-ics": exportarICS({ incluirClases: $("#ics-clases").checked }); break;
     }
   }
   if (e.target.matches("[data-cerrar]")) e.target.closest("dialog").close();
 });
+
+// Cerrar un diálogo tocando el fondo oscuro.
+document.querySelectorAll("dialog").forEach((d) =>
+  d.addEventListener("click", (e) => {
+    if (e.target !== d) return;
+    const r = d.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close();
+  })
+);
 
 // ---------- semestres ----------
 let semestreEditando = null;
 
 $("#selector-semestre").addEventListener("change", (e) => {
   if (e.target.value === "__nuevo") {
-    e.target.value = datos.semestreActivo;
+    e.target.value = estado.datos.semestreActivo;
     abrirSemestre();
     return;
   }
-  datos.semestreActivo = e.target.value;
+  estado.datos.semestreActivo = e.target.value;
   guardar();
   pintar();
 });
@@ -473,10 +255,10 @@ function abrirSemestre(idSemestre = null) {
   const f = $("#form-semestre");
   f.reset();
   $("#error-semestre").textContent = "";
-  const s = idSemestre ? datos.semestres.find((x) => x.id === idSemestre) : null;
+  const s = idSemestre ? estado.datos.semestres.find((x) => x.id === idSemestre) : null;
   $("#titulo-semestre").textContent = s ? "Renombrar semestre" : "Nuevo semestre";
   $("#copiar-materias-casilla").classList.toggle("oculto", !!s || semestre().materias.length === 0);
-  $("#boton-borrar-semestre").classList.toggle("oculto", !s || datos.semestres.length < 2);
+  $("#boton-borrar-semestre").classList.toggle("oculto", !s || estado.datos.semestres.length < 2);
   f.nombre.value = s ? s.nombre : "";
   $("#dialogo-semestre").showModal();
   f.nombre.focus();
@@ -484,22 +266,28 @@ function abrirSemestre(idSemestre = null) {
 
 $("#form-semestre").addEventListener("submit", (e) => {
   const f = e.target;
+  const d = estado.datos;
   const nombre = f.nombre.value.trim();
-  const repetido = datos.semestres.some((s) => s.nombre.toLowerCase() === nombre.toLowerCase() && s.id !== semestreEditando);
+  const repetido = d.semestres.some((s) => s.nombre.toLowerCase() === nombre.toLowerCase() && s.id !== semestreEditando);
   if (!nombre || repetido) {
     e.preventDefault();
     $("#error-semestre").textContent = nombre ? "Ya tienes un semestre con ese nombre." : "Ponle nombre.";
     return;
   }
-  if (semestreEditando) {
-    datos.semestres.find((s) => s.id === semestreEditando).nombre = nombre;
-  } else {
-    const materias = f.copiar.checked
-      ? semestre().materias.map((m) => ({ ...clonar(m), id: id(), trabajos: m.trabajos.map((t) => ({ ...t, id: id(), nota: null })) }))
-      : [];
-    const s = { id: id(), nombre, creado: new Date().toISOString(), materias };
-    datos.semestres.push(s);
-    datos.semestreActivo = s.id;
+  if (semestreEditando) d.semestres.find((s) => s.id === semestreEditando).nombre = nombre;
+  else {
+    const s = semestreVacio(nombre);
+    if (f.copiar.checked) {
+      const mapa = {};
+      s.materias = semestre().materias.map((m) => {
+        const nueva = { ...clonar(m), id: nuevoId(), trabajos: m.trabajos.map((t) => ({ ...t, id: nuevoId(), nota: null })) };
+        mapa[m.id] = nueva.id;
+        return nueva;
+      });
+      s.horario = (semestre().horario || []).filter((b) => mapa[b.materiaId]).map((b) => ({ ...b, id: nuevoId(), materiaId: mapa[b.materiaId] }));
+    }
+    d.semestres.push(s);
+    d.semestreActivo = s.id;
   }
   guardar();
   pintar();
@@ -507,16 +295,18 @@ $("#form-semestre").addEventListener("submit", (e) => {
 });
 
 $("#boton-borrar-semestre").addEventListener("click", () => {
-  const s = datos.semestres.find((x) => x.id === semestreEditando);
-  if (!s || !confirm(`¿Borrar el semestre "${s.nombre}" con todas sus materias y notas?`)) return;
+  const d = estado.datos;
+  const s = d.semestres.find((x) => x.id === semestreEditando);
+  if (!s || !confirm(`¿Borrar el semestre "${s.nombre}" con todas sus materias, notas y horario?\nSus tareas pasan a la Bandeja de entrada.`)) return;
   antesDeCambio();
-  datos.semestres = datos.semestres.filter((x) => x.id !== s.id);
-  datos.semestreActivo = datos.semestres[datos.semestres.length - 1].id;
+  d.semestres = d.semestres.filter((x) => x.id !== s.id);
+  for (const t of d.tareas) if (t.destino?.tipo === "materia" && t.destino.semestreId === s.id) { t.destino = { tipo: "bandeja" }; t.evaluacion = null; }
+  d.semestreActivo = d.semestres[d.semestres.length - 1].id;
   guardar({ deshacible: true });
   $("#dialogo-semestre").close();
   $("#dialogo-ajustes").close();
   pintar();
-  toast(`Borraste el semestre ${s.nombre}`, { deshacer: true });
+  mostrarToast(`Borraste el semestre ${s.nombre}`, { deshacer: true });
 });
 
 // ---------- ajustes ----------
@@ -532,23 +322,37 @@ $("#boton-sync").addEventListener("click", () => {
 function abrirAjustes() {
   $("#version").textContent = VERSION;
   pintarAjustesApariencia();
-  $("#nota-aprobacion").value = notaEditable(datos.ajustes.notaAprobacion);
+  $("#nota-aprobacion").value = notaEditable(estado.datos.ajustes.notaAprobacion);
   pintarAjustesSync();
+  pintarAjustesNotificaciones();
   $("#dialogo-ajustes").showModal();
 }
 
 function pintarAjustesApariencia() {
-  for (const b of $("#opciones-tema").children) b.setAttribute("aria-pressed", String(b.dataset.tema === datos.ajustes.tema));
+  const a = estado.datos.ajustes;
+  for (const b of $("#opciones-tema").children) b.setAttribute("aria-pressed", String(b.dataset.tema === a.tema));
   $("#opciones-paleta").innerHTML = PALETAS.map(
-    (p) => `<button type="button" class="paleta-opcion" data-paleta="${p.id}" aria-pressed="${p.id === datos.ajustes.paleta}">
+    (p) => `<button type="button" class="paleta-opcion" data-paleta="${p.id}" aria-pressed="${p.id === a.paleta}">
       <span class="muestra" style="background:${p.color}"></span>${p.nombre}</button>`
   ).join("");
+}
+
+function pintarAjustesNotificaciones() {
+  const p = estadoPermiso();
+  const textos = {
+    granted: "Activadas. Te aviso con la app abierta o instalada.",
+    denied: "Bloqueadas en este navegador. Actívalas en los permisos del sitio. Mientras tanto, los avisos salen dentro de la app.",
+    default: "Aún no las has permitido. Los avisos salen dentro de la app.",
+    "no-disponible": "Este navegador no permite notificaciones; los avisos salen dentro de la app.",
+  };
+  $("#info-notificaciones").textContent = textos[p];
+  $("#boton-notificaciones").classList.toggle("oculto", p !== "default");
 }
 
 $("#opciones-tema").addEventListener("click", (e) => {
   const b = e.target.closest("[data-tema]");
   if (!b) return;
-  datos.ajustes.tema = b.dataset.tema;
+  estado.datos.ajustes.tema = b.dataset.tema;
   aplicarApariencia();
   pintarAjustesApariencia();
   guardar();
@@ -557,7 +361,7 @@ $("#opciones-tema").addEventListener("click", (e) => {
 $("#opciones-paleta").addEventListener("click", (e) => {
   const b = e.target.closest("[data-paleta]");
   if (!b) return;
-  datos.ajustes.paleta = b.dataset.paleta;
+  estado.datos.ajustes.paleta = b.dataset.paleta;
   aplicarApariencia();
   pintarAjustesApariencia();
   guardar();
@@ -566,16 +370,17 @@ $("#opciones-paleta").addEventListener("click", (e) => {
 $("#nota-aprobacion").addEventListener("change", (e) => {
   const r = interpretarNota(e.target.value);
   if (!r.ok || r.valor === null) {
-    toast("Escribe una nota entre 0 y 5.");
-    e.target.value = notaEditable(datos.ajustes.notaAprobacion);
+    mostrarToast("Escribe una nota entre 0 y 5.");
+    e.target.value = notaEditable(estado.datos.ajustes.notaAprobacion);
     return;
   }
-  datos.ajustes.notaAprobacion = r.valor;
+  estado.datos.ajustes.notaAprobacion = r.valor;
+  e.target.value = notaEditable(r.valor);
   guardar();
   pintar();
 });
 
-$("#boton-renombrar-semestre").addEventListener("click", () => abrirSemestre(datos.semestreActivo));
+$("#boton-renombrar-semestre").addEventListener("click", () => abrirSemestre(estado.datos.semestreActivo));
 $("#boton-nuevo-semestre").addEventListener("click", () => abrirSemestre());
 
 function pintarAjustesSync() {
@@ -584,16 +389,16 @@ function pintarAjustesSync() {
   const botones = $("#botones-sync");
   if (!c) {
     info.textContent = "No está conectada. Los datos viven solo en este dispositivo.";
-    botones.innerHTML = `<button class="boton primario" data-accion="conectar">Conectar con GitHub</button>`;
+    botones.innerHTML = `<button class="boton primario" data-accion-app="conectar">Conectar con GitHub</button>`;
     return;
   }
   const cuando = sync.ultimaSincronizacion ? new Date(sync.ultimaSincronizacion).toLocaleString("es-CO") : "aún no";
   info.innerHTML = `Conectada a <code>${escapar(c.usuario)}/${escapar(c.repo)}</code> · ${escapar(TEXTO_SYNC[sync.estado])} · última revisión: ${escapar(cuando)}`;
   botones.innerHTML = `
-    <button class="boton" data-accion="sincronizar-ya">Sincronizar ahora</button>
-    ${sync.estado === ESTADOS.BLOQUEADO ? `<button class="boton" data-accion="desbloquear">Escribir contraseña</button>` : ""}
-    <button class="boton" data-accion="conectar">Cambiar conexión</button>
-    <button class="boton peligro" data-accion="desconectar">Desconectar</button>`;
+    <button class="boton" data-accion-app="sincronizar-ya">Sincronizar ahora</button>
+    ${sync.estado === ESTADOS.BLOQUEADO ? `<button class="boton" data-accion-app="desbloquear">Escribir contraseña</button>` : ""}
+    <button class="boton" data-accion-app="conectar">Cambiar conexión</button>
+    <button class="boton peligro" data-accion-app="desconectar">Desconectar</button>`;
 }
 
 // ---------- conectar / desbloquear / conflicto ----------
@@ -613,14 +418,11 @@ $("#form-conectar").addEventListener("submit", async (e) => {
   boton.textContent = "Probando…";
   $("#error-conectar").textContent = "";
   try {
-    await sync.configurar({
-      usuario: f.usuario.value, repo: f.repo.value, token: f.token.value,
-      contrasena: f.contrasena.value, recordar: f.recordar.checked,
-    });
+    await sync.configurar({ usuario: f.usuario.value, repo: f.repo.value, token: f.token.value, contrasena: f.contrasena.value, recordar: f.recordar.checked });
     $("#dialogo-conectar").close();
     f.token.value = "";
     f.contrasena.value = "";
-    toast("Conectado con GitHub");
+    mostrarToast("Conectado con GitHub");
   } catch (err) {
     $("#error-conectar").textContent = err.name === "ContrasenaIncorrecta"
       ? "Ya hay datos en ese repo y esta contraseña no los abre. Usa la misma contraseña que en tu otro dispositivo."
@@ -667,7 +469,7 @@ $("#conflicto-remoto").addEventListener("click", async () => {
 
 // ---------- respaldo ----------
 function descargarRespaldo(nombre = "semestre-respaldo") {
-  const blob = new Blob([JSON.stringify({ app: "semestre", version: VERSION, exportado: new Date().toISOString(), datos }, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ app: "semestre", version: VERSION, exportado: new Date().toISOString(), datos: estado.datos }, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `${nombre}-${new Date().toISOString().slice(0, 10)}.json`;
@@ -687,25 +489,40 @@ $("#archivo-importar").addEventListener("change", async (e) => {
     if (!nuevos || !Array.isArray(nuevos.semestres)) throw new Error("formato");
     if (!confirm("Esto reemplaza todos los datos actuales por los del respaldo. ¿Seguir?")) return;
     antesDeCambio();
-    datos = normalizar(nuevos);
+    estado.datos = normalizar(nuevos);
     guardar({ deshacible: true });
     aplicarApariencia();
     pintar();
     $("#dialogo-ajustes").close();
-    toast("Respaldo restaurado", { deshacer: true });
+    mostrarToast("Respaldo restaurado", { deshacer: true });
   } catch {
-    toast("Ese archivo no es un respaldo de Semestre.");
+    mostrarToast("Ese archivo no es un respaldo de Semestre.");
   }
 });
 
 // ---------- arranque ----------
-// Si no hay nada guardado, se arranca con un semestre vacío que solo se guarda
-// al primer cambio (así, al conectar un dispositivo nuevo, manda lo que hay en GitHub).
-datos = normalizar(sync.datos ? clonar(sync.datos) : null);
+// Sin nada guardado se arranca vacío y solo se guarda al primer cambio
+// (así, al conectar un dispositivo nuevo, manda lo que hay en GitHub).
+estado.datos = normalizar(sync.datos ? clonar(sync.datos) : null);
+if (sync.datos && sync.datos.esquema !== ESQUEMA) {
+  // Migración desde la versión 0.1: se guarda una vez con el formato nuevo.
+  sync.guardar(clonar(estado.datos));
+}
 aplicarApariencia();
+iniciarNotas();
+iniciarTareas();
+iniciarCalendario();
+history.replaceState(null, "", `#${vista}`);
 pintar();
 sync.iniciar();
+iniciarRecordatorios();
 
-if ("serviceWorker" in navigator && location.protocol === "https:") {
+// Al cambiar de día con la app abierta, se repinta (Hoy / Mañana / Atrasadas).
+let diaActual = new Date().toDateString();
+setInterval(() => {
+  if (new Date().toDateString() !== diaActual) { diaActual = new Date().toDateString(); pintar(); }
+}, 60000);
+
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }

@@ -1,8 +1,11 @@
 // Permite abrir la app sin internet. Siempre intenta traer la versión nueva primero.
-const CACHE = "semestre-v0.1.0";
+const CACHE = "semestre-v0.2.0";
 const ARCHIVOS = [
   "./", "index.html", "css/estilos.css", "js/app.js", "js/calculos.js",
   "js/comun/sync.js", "js/comun/cifrado.js", "js/comun/github.js",
+  "js/nucleo.js", "js/fechas.js", "js/ics.js", "js/recordatorios.js",
+  "js/vistas/notas.js", "js/vistas/tareas.js", "js/vistas/calendario.js",
+  "js/componentes/composer.js", "js/componentes/popover.js",
   "manifest.webmanifest", "img/icono.svg", "img/icono-192.png",
 ];
 
@@ -27,5 +30,16 @@ self.addEventListener("fetch", (e) => {
         return r;
       })
       .catch(() => caches.match(e.request, { ignoreSearch: true }))
+  );
+});
+
+// Al tocar una notificación, abre (o enfoca) la app en Tareas.
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((ventanas) => {
+      for (const v of ventanas) if ("focus" in v) return v.focus();
+      return self.clients.openWindow("./#tareas");
+    })
   );
 });
