@@ -1,6 +1,6 @@
 // Núcleo compartido entre las pestañas: estado, guardado, utilidades y catálogos.
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.3.0";
 export const ESQUEMA = 2;
 
 export const estado = { datos: null };

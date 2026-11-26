@@ -1,5 +1,7 @@
 // Semestre · arranque, pestañas, sincronización y ajustes
-import { crearSincronizador, ESTADOS } from "./comun/sync.js";
+import { crearDocumento, ESTADOS } from "./comun/documento.js";
+import { aRegistros, desdeRegistros } from "./registros.js";
+import { datosLegados, configLegada, crearMigracionRemota, limpiarDatosLocalesLegados } from "./legado.js";
 import {
   VERSION, ESQUEMA, estado, ganchos, $, escapar, nuevoId, clonar, semestre, toast,
   antesDeCambio, tomarAnterior, olvidarAnterior, preferencia, guardarPreferencia, COLORES,
@@ -26,18 +28,21 @@ function nombreSemestreActual(fecha = new Date()) {
   return `${fecha.getFullYear()}-${fecha.getMonth() < 6 ? 1 : 2}`;
 }
 
-function semestreVacio(nombre = nombreSemestreActual()) {
-  return { id: nuevoId(), nombre, creado: new Date().toISOString(), materias: [], horario: [] };
+function semestreVacio(nombre = nombreSemestreActual(), id = nuevoId()) {
+  return { id, nombre, creado: new Date().toISOString(), materias: [], horario: [] };
 }
 
+// Ids fijos: dos dispositivos que empiezan de cero no duplican el semestre ni la lista.
 function datosIniciales() {
-  const s = semestreVacio();
+  const nombre = nombreSemestreActual();
+  const s = semestreVacio(nombre, "sem-inicial");
+  s.creado = "2000-01-01T00:00:00.000Z";
   return {
     esquema: ESQUEMA,
     ajustes: { notaAprobacion: 3.0, tema: "auto", paleta: "tomate" },
     semestres: [s],
     semestreActivo: s.id,
-    listas: [{ id: nuevoId(), nombre: "Personal", color: COLORES[7] }],
+    listas: [{ id: "personal", nombre: "Personal", color: COLORES[7] }],
     tareas: [],
   };
 }
@@ -55,7 +60,7 @@ function normalizar(d) {
       m.color ||= COLORES[0];
     }
   }
-  if (!Array.isArray(d.listas)) d.listas = [{ id: nuevoId(), nombre: "Personal", color: COLORES[7] }];
+  if (!Array.isArray(d.listas)) d.listas = [{ id: "personal", nombre: "Personal", color: COLORES[7] }];
   if (!Array.isArray(d.tareas)) d.tareas = [];
   for (const t of d.tareas) {
     t.destino ||= { tipo: "bandeja" };
@@ -64,25 +69,40 @@ function normalizar(d) {
     t.evaluacion ??= null;
     t.descripcion ??= "";
   }
-  if (!d.semestres.some((s) => s.id === d.semestreActivo)) d.semestreActivo = d.semestres[d.semestres.length - 1].id;
+  // El semestre que estás viendo es de cada dispositivo (no se sincroniza).
+  const elegido = preferencia("semestreActivo", null) || d.semestreActivo;
+  d.semestreActivo = d.semestres.some((s) => s.id === elegido) ? elegido : d.semestres[d.semestres.length - 1].id;
   d.esquema = ESQUEMA;
   return d;
 }
 
-const sync = crearSincronizador({
+let listo = false;
+const sync = await crearDocumento({
   app: "semestre",
+  version: VERSION,
+  inicial: datosIniciales,
+  aRegistros,
+  desdeRegistros,
+  datosLegados: () => {
+    const v = datosLegados();
+    return v ? { ...v, datos: normalizar(v.datos) } : null;
+  },
+  configLegada,
+  antesDeSincronizar: crearMigracionRemota({ aRegistros, normalizar }),
+  pedirContrasena,
   alCambiar: ({ estado: e, mensaje, datosCambiaron }) => {
+    if (!listo) return;
     if (datosCambiaron) {
       estado.datos = normalizar(clonar(sync.datos));
       aplicarApariencia();
       pintar();
     }
     pintarEstadoSync(e, mensaje);
-    if (e === ESTADOS.CONFLICTO) abrirConflicto();
   },
 });
 
 function guardar({ deshacible = false } = {}) {
+  guardarPreferencia("semestreActivo", estado.datos.semestreActivo);
   sync.guardar(clonar(estado.datos));
   if (!deshacible) olvidarAnterior();
 }
@@ -151,7 +171,6 @@ const TEXTO_SYNC = {
   [ESTADOS.SINCRONIZADO]: "Sincronizado",
   [ESTADOS.PENDIENTE]: "Guardando…",
   [ESTADOS.SINCRONIZANDO]: "Sincronizando…",
-  [ESTADOS.CONFLICTO]: "Conflicto",
   [ESTADOS.ERROR]: "Error",
   [ESTADOS.SIN_CONEXION]: "Sin conexión",
 };
@@ -213,7 +232,10 @@ document.addEventListener("click", (e) => {
     switch (b.dataset.accionApp) {
       case "conectar": abrirConectar(); break;
       case "desbloquear": abrirDesbloquear(); break;
-      case "reintentar": case "sincronizar-ya": sync.sincronizar(); break;
+      case "reintentar": case "sincronizar-ya": sync.sincronizar({ interactivo: true }); break;
+      case "olvidar-clave":
+        if (confirm("¿Olvidar la contraseña en este dispositivo? Se pedirá otra vez al sincronizar.")) sync.olvidarContrasena();
+        break;
       case "ocultar-aviso-sync": guardarPreferencia("aviso-sync-oculto", true); $("#avisos").innerHTML = ""; break;
       case "desconectar":
         if (confirm("¿Desconectar este dispositivo de GitHub? Los datos siguen aquí y en GitHub; solo deja de sincronizar.")) sync.desconectar();
@@ -314,9 +336,7 @@ $("#boton-ajustes").addEventListener("click", abrirAjustes);
 $("#boton-sync").addEventListener("click", () => {
   const e = sync.estado;
   if (e === ESTADOS.SIN_CONFIGURAR) abrirConectar();
-  else if (e === ESTADOS.BLOQUEADO) abrirDesbloquear();
-  else if (e === ESTADOS.CONFLICTO) abrirConflicto();
-  else sync.sincronizar();
+  else sync.sincronizar({ interactivo: true });
 });
 
 function abrirAjustes() {
@@ -398,10 +418,11 @@ function pintarAjustesSync() {
     <button class="boton" data-accion-app="sincronizar-ya">Sincronizar ahora</button>
     ${sync.estado === ESTADOS.BLOQUEADO ? `<button class="boton" data-accion-app="desbloquear">Escribir contraseña</button>` : ""}
     <button class="boton" data-accion-app="conectar">Cambiar conexión</button>
+    <button class="boton" data-accion-app="olvidar-clave">Olvidar contraseña aquí</button>
     <button class="boton peligro" data-accion-app="desconectar">Desconectar</button>`;
 }
 
-// ---------- conectar / desbloquear / conflicto ----------
+// ---------- conectar / contraseña ----------
 function abrirConectar() {
   const f = $("#form-conectar");
   const c = sync.config;
@@ -418,54 +439,56 @@ $("#form-conectar").addEventListener("submit", async (e) => {
   boton.textContent = "Probando…";
   $("#error-conectar").textContent = "";
   try {
-    await sync.configurar({ usuario: f.usuario.value, repo: f.repo.value, token: f.token.value, contrasena: f.contrasena.value, recordar: f.recordar.checked });
     $("#dialogo-conectar").close();
+    await sync.configurar({ usuario: f.usuario.value, repo: f.repo.value, token: f.token.value });
     f.token.value = "";
-    f.contrasena.value = "";
-    mostrarToast("Conectado con GitHub");
+    if (sync.estado === ESTADOS.SINCRONIZADO) mostrarToast("Conectado con GitHub");
   } catch (err) {
-    $("#error-conectar").textContent = err.name === "ContrasenaIncorrecta"
-      ? "Ya hay datos en ese repo y esta contraseña no los abre. Usa la misma contraseña que en tu otro dispositivo."
-      : err.message || String(err);
+    $("#error-conectar").textContent = err.message || String(err);
+    $("#dialogo-conectar").showModal();
   } finally {
     boton.disabled = false;
     boton.textContent = "Conectar";
   }
 });
 
+// El módulo común pide la contraseña con esto: al conectar el primer dispositivo (isNew: crearla)
+// o en uno nuevo (escribir la que ya tienes). Devuelve la contraseña o null si cancelas.
+function pedirContrasena({ isNew }) {
+  return new Promise((resolver) => {
+    const dlg = $("#dialogo-desbloquear");
+    const f = $("#form-desbloquear");
+    f.reset();
+    $("#titulo-contrasena").textContent = isNew ? "Crea una contraseña de cifrado" : "Escribe tu contraseña de cifrado";
+    $("#texto-contrasena").textContent = isNew
+      ? "Cifra tus datos antes de subirlos a GitHub. Usa la misma en el PC y en el celular. Si la pierdes, no se pueden recuperar."
+      : "Es la contraseña con la que cifraste tus datos en tu otro dispositivo.";
+    $("#repetir-contrasena").classList.toggle("oculto", !isNew);
+    f.repetir.required = !!isNew;
+    $("#error-desbloquear").textContent = "";
+    const terminar = (valor) => {
+      f.removeEventListener("submit", enviar);
+      dlg.removeEventListener("close", cerrar);
+      if (dlg.open) dlg.close();
+      resolver(valor);
+    };
+    const enviar = (e) => {
+      e.preventDefault();
+      if (isNew && f.contrasena.value.length < 8) { $("#error-desbloquear").textContent = "Usa al menos 8 caracteres."; return; }
+      if (isNew && f.contrasena.value !== f.repetir.value) { $("#error-desbloquear").textContent = "Las contraseñas no coinciden."; return; }
+      terminar(f.contrasena.value);
+    };
+    const cerrar = () => terminar(null);
+    f.addEventListener("submit", enviar);
+    dlg.addEventListener("close", cerrar);
+    dlg.showModal();
+    f.contrasena.focus();
+  });
+}
+
 function abrirDesbloquear() {
-  $("#error-desbloquear").textContent = "";
-  $("#form-desbloquear").reset();
-  $("#dialogo-desbloquear").showModal();
+  sync.sincronizar({ interactivo: true });
 }
-
-$("#form-desbloquear").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const f = e.target;
-  try {
-    await sync.desbloquear(f.contrasena.value, f.recordar.checked);
-    $("#dialogo-desbloquear").close();
-  } catch (err) {
-    $("#error-desbloquear").textContent = err.name === "ContrasenaIncorrecta" ? "Esa contraseña no abre los datos." : err.message;
-  }
-});
-
-function abrirConflicto() {
-  const c = sync.conflicto;
-  if (!c || $("#dialogo-conflicto").open) return;
-  $("#detalle-conflicto").textContent = `Versión de GitHub guardada el ${new Date(c.guardado).toLocaleString("es-CO")}.`;
-  $("#dialogo-conflicto").showModal();
-}
-
-$("#conflicto-local").addEventListener("click", async () => {
-  $("#dialogo-conflicto").close();
-  await sync.resolverConflicto("local");
-});
-$("#conflicto-remoto").addEventListener("click", async () => {
-  descargarRespaldo("semestre-respaldo-antes-de-conflicto");
-  $("#dialogo-conflicto").close();
-  await sync.resolverConflicto("remoto");
-});
 
 // ---------- respaldo ----------
 function descargarRespaldo(nombre = "semestre-respaldo") {
@@ -503,17 +526,16 @@ $("#archivo-importar").addEventListener("change", async (e) => {
 // ---------- arranque ----------
 // Sin nada guardado se arranca vacío y solo se guarda al primer cambio
 // (así, al conectar un dispositivo nuevo, manda lo que hay en GitHub).
-estado.datos = normalizar(sync.datos ? clonar(sync.datos) : null);
-if (sync.datos && sync.datos.esquema !== ESQUEMA) {
-  // Migración desde la versión 0.1: se guarda una vez con el formato nuevo.
-  sync.guardar(clonar(estado.datos));
-}
+limpiarDatosLocalesLegados();
+estado.datos = normalizar(clonar(sync.datos));
 aplicarApariencia();
 iniciarNotas();
 iniciarTareas();
 iniciarCalendario();
 history.replaceState(null, "", `#${vista}`);
 pintar();
+listo = true;
+pintarEstadoSync(sync.estado, sync.mensaje);
 sync.iniciar();
 iniciarRecordatorios();
 
