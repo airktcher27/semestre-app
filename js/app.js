@@ -160,7 +160,7 @@ function pintarSelectorSemestre() {
   const sel = $("#selector-semestre");
   const d = estado.datos;
   sel.innerHTML =
-    d.semestres.map((s) => `<option value="${s.id}" ${s.id === d.semestreActivo ? "selected" : ""}>${escapar(s.nombre)}</option>`).join("") +
+    d.semestres.map((s) => `<option value="${s.id}" ${s.id === d.semestreActivo ? "selected" : ""}>${escapar(s.nombre)}${s.archivado ? " (archivado)" : ""}</option>`).join("") +
     `<option value="__nuevo">+ Nuevo semestre…</option>`;
 }
 

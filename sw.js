@@ -1,11 +1,11 @@
 // Permite abrir la app sin internet. Siempre intenta traer la versión nueva primero.
-const CACHE = "semestre-v0.3.0";
+const CACHE = "semestre-v0.4.0";
 const ARCHIVOS = [
   "./", "index.html", "css/estilos.css", "js/app.js", "js/calculos.js",
   "js/comun/sync.js", "js/comun/crypto.js", "js/comun/github.js", "js/comun/merge.js",
   "js/comun/store.js", "js/comun/errors.js", "js/comun/documento.js", "js/registros.js", "js/legado.js",
   "js/nucleo.js", "js/fechas.js", "js/ics.js", "js/recordatorios.js",
-  "js/vistas/notas.js", "js/vistas/tareas.js", "js/vistas/calendario.js",
+  "js/vistas/notas.js", "js/vistas/historial.js", "js/vistas/tareas.js", "js/vistas/calendario.js",
   "js/componentes/composer.js", "js/componentes/popover.js",
   "manifest.webmanifest", "img/icono.svg", "img/icono-192.png",
 ];

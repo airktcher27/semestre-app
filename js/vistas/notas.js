@@ -4,14 +4,16 @@ import {
   semestre, buscarMateria, tareaDeTrabajo, COLORES, TIPOS_EVALUACION, preferencia, guardarPreferencia,
 } from "../nucleo.js";
 import {
-  resumenMateria, resumenSemestre, estadoMateria,
+  resumenMateria, resumenSemestre, estadoMateria, definitivaMateria,
   formatoNota, formatoPorcentaje, interpretarNota, interpretarPorcentaje,
 } from "../calculos.js";
+import { pintarHistorial, iniciarHistorial } from "./historial.js";
 import { fechaRelativa, hoyISO } from "../fechas.js";
 import { abrirTareaEnDialogo, ICONOS } from "../componentes/composer.js";
 
 const ETIQUETA_ESTADO = { bien: "Vas bien", cuidado: "Cerca del límite", riesgo: "Por debajo", "sin-notas": "Sin notas" };
 const abiertas = new Set(preferencia("abiertas", []));
+let subvista = preferencia("subvistaNotas", "semestre");
 
 // 4 → "4,0" · 3.85 → "3,85"
 export function notaEditable(n) {
@@ -19,8 +21,22 @@ export function notaEditable(n) {
 }
 
 export function pintarNotas() {
+  for (const b of $("#subvista-notas").children) b.setAttribute("aria-pressed", String(b.dataset.sub === subvista));
+  $("#vista-historial").classList.toggle("oculto", subvista !== "historial");
+  $("#vista-semestre").classList.toggle("oculto", subvista !== "semestre");
+  if (subvista === "historial") { pintarHistorial(); return; }
+  const s = semestre();
+  $("#aviso-archivado").innerHTML = s.archivado
+    ? `<div class="aviso"><p><b>${escapar(s.nombre)}</b> está archivado: hace parte del historial. Puedes seguir editándolo.</p><button class="boton" data-accion="desarchivar">Desarchivar</button></div>`
+    : "";
   pintarResumen();
   pintarMaterias();
+}
+
+function cambiarSubvista(nueva) {
+  subvista = nueva;
+  guardarPreferencia("subvistaNotas", subvista);
+  pintarNotas();
 }
 
 function pintarResumen() {
@@ -58,7 +74,15 @@ function pintarMaterias() {
 
 function htmlMateria(m) {
   const r = resumenMateria(m);
-  const est = estadoMateria(r, estado.datos.ajustes.notaAprobacion);
+  const def = definitivaMateria(m, estado.datos.ajustes.notaAprobacion);
+  let est = estadoMateria(r, estado.datos.ajustes.notaAprobacion);
+  let chip = ETIQUETA_ESTADO[est];
+  if (def.estado === "aprobada" || def.estado === "reprobada") {
+    est = def.estado === "aprobada" ? "bien" : "riesgo";
+    chip = def.nota !== null ? `Definitiva ${formatoNota(def.nota, 1)}` : def.estado === "aprobada" ? "Aprobada" : "Reprobada";
+  }
+  if (def.estado === "cancelada") { est = "sin-notas"; chip = "Cancelada"; }
+  if (m.calificacion === "ap" && def.estado === "en-curso") { est = "sin-notas"; chip = "Aprobado/Reprobado"; }
   const abierta = abiertas.has(m.id) || m.trabajos.length === 0;
   const meta = [m.codigo, `${m.creditos || 0} crédito${Number(m.creditos) === 1 ? "" : "s"}`, m.docente].filter(Boolean).map(escapar).join(" · ");
   const hoy = hoyISO();
@@ -91,7 +115,7 @@ function htmlMateria(m) {
   }).join("");
 
   return `
-  <article class="materia ${abierta ? "abierta" : ""}" data-materia="${m.id}" style="--color-materia:${m.color};--color-estado:var(--${est})">
+  <article class="materia ${abierta ? "abierta" : ""} ${m.cancelada ? "cancelada" : ""}" data-materia="${m.id}" style="--color-materia:${m.color};--color-estado:var(--${est})">
     <div class="materia-cabeza">
       <div class="materia-titulo">
         <h3>${escapar(m.nombre)}</h3>
@@ -102,7 +126,7 @@ function htmlMateria(m) {
     <div class="materia-notas">
       <div><div class="nota-etiqueta">Acumulada</div><div class="nota-grande">${formatoNota(r.acumulada)}</div></div>
       <div><div class="nota-etiqueta">Sobre lo evaluado</div><div class="nota-chica">${formatoNota(r.promedioEvaluado)}</div></div>
-      <span class="chip-estado" data-estado="${est}">${ETIQUETA_ESTADO[est]}</span>
+      <span class="chip-estado" data-estado="${est}">${chip}</span>
     </div>
     <div class="barra-progreso">
       <div class="barra-pista" role="progressbar" aria-valuenow="${r.evaluado}" aria-valuemin="0" aria-valuemax="100" aria-label="Porcentaje evaluado">
@@ -141,14 +165,25 @@ function abrirMateria(idMateria = null) {
     f.docente.value = m.docente || "";
     f.creditos.value = m.creditos || "";
     f.codigo.value = m.codigo || "";
+    f.calificacion.value = m.calificacion === "ap" ? "ap" : "numerica";
+    f.notaFinal.value = m.notaFinal === null || m.notaFinal === undefined ? "" : notaEditable(m.notaFinal);
+    f.aprobada.value = m.aprobada === true ? "si" : m.aprobada === false ? "no" : "";
+    f.cancelada.checked = !!m.cancelada;
     colorElegido = m.color;
   } else {
     const usados = new Set(semestre().materias.map((x) => x.color));
     colorElegido = COLORES.find((c) => !usados.has(c)) || COLORES[0];
   }
+  $("#opciones-definitiva").open = !!(m && (m.calificacion === "ap" || m.cancelada || (m.notaFinal !== null && m.notaFinal !== undefined)));
+  alternarCalificacion();
   pintarColores();
   $("#dialogo-materia").showModal();
   f.nombre.focus();
+}
+
+function alternarCalificacion() {
+  const tipo = $("#form-materia").calificacion.value;
+  document.querySelectorAll("#form-materia [data-solo]").forEach((el) => el.classList.toggle("oculto", el.dataset.solo !== tipo));
 }
 
 function pintarColores() {
@@ -162,6 +197,14 @@ function guardarAbiertas() {
 }
 
 export function iniciarNotas() {
+  iniciarHistorial();
+  $("#subvista-notas").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sub]");
+    if (b) cambiarSubvista(b.dataset.sub);
+  });
+  document.addEventListener("subvista-notas", (e) => cambiarSubvista(e.detail));
+  $("#form-materia").calificacion.addEventListener("change", alternarCalificacion);
+
   $("#colores-materia").addEventListener("click", (e) => {
     const b = e.target.closest("[data-color]");
     if (!b) return;
@@ -176,6 +219,12 @@ export function iniciarNotas() {
     if (!nombre) { e.preventDefault(); $("#error-materia").textContent = "Ponle nombre a la materia."; return; }
     if (!(creditos >= 1 && creditos <= 20)) { e.preventDefault(); $("#error-materia").textContent = "Los créditos deben ser un número entre 1 y 20."; return; }
     const valores = { nombre, docente: f.docente.value.trim(), creditos, codigo: f.codigo.value.trim(), color: colorElegido };
+    const nf = interpretarNota(f.notaFinal.value);
+    if (f.calificacion.value === "numerica" && !nf.ok) { e.preventDefault(); $("#error-materia").textContent = "La nota final debe estar entre 0 y 5 (o déjala vacía)."; return; }
+    valores.calificacion = f.calificacion.value === "ap" ? "ap" : undefined;
+    valores.notaFinal = f.calificacion.value === "numerica" ? nf.valor : null;
+    valores.aprobada = f.calificacion.value === "ap" ? (f.aprobada.value === "si" ? true : f.aprobada.value === "no" ? false : null) : undefined;
+    valores.cancelada = f.cancelada.checked || undefined;
     if (materiaEditando) {
       Object.assign(buscarMateria(materiaEditando), valores);
     } else {
@@ -247,6 +296,7 @@ export function iniciarNotas() {
     const m = tarjeta ? buscarMateria(tarjeta.dataset.materia) : null;
     switch (b.dataset.accion) {
       case "nueva-materia": abrirMateria(); break;
+      case "desarchivar": semestre().archivado = false; guardar(); pintar(); break;
       case "editar-materia": abrirMateria(m.id); break;
       case "alternar":
         abiertas.has(m.id) ? abiertas.delete(m.id) : abiertas.add(m.id);

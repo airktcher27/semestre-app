@@ -3,7 +3,12 @@
 App web para llevar las materias, las notas y el promedio del semestre (ponderado por créditos).
 Funciona en el PC y en el celular, y se sincroniza cifrada con un repo privado de GitHub, igual que la app de finanzas.
 
-**Versión 0.3.0: Fases 1 y 2, con el módulo común de sincronización** (el mismo de *Finanzas*, en `js/comun/`)
+**Versión 0.4.0: las 3 fases completas**, con el módulo común de sincronización (el mismo de *Finanzas*, en `js/comun/`)
+- **Historial y PAPA** (Notas → *Historial y PAPA*): PAPA, PA, créditos aprobados y cursados, promedio de cada periodo y gráfica de su evolución.
+  Los semestres anteriores se agregan en bloque copiando las notas definitivas del SIA. Las materias repetidas se reconocen por su código.
+- **Nota definitiva** de cada materia: se calcula sola cuando todos sus trabajos tienen nota, o la escribes tú (la del SIA manda).
+  También hay materias *Aprobado/Reprobado* y canceladas.
+- **Archivar** un semestre: pasa al historial y sigue siendo editable.
 - **Tareas:** cosas por hacer agrupadas por día (Atrasadas, Hoy, Mañana…), con fecha escrita en palabras ("viernes 3pm", "15 dic"), prioridad 1–3, recordatorio y destino: Bandeja, tus listas propias o una materia.
 - **Entregas y parciales:** una tarea de una materia se puede ligar a uno de sus trabajos. Cuando pones la nota en la tarea, aparece también en Notas.
 - **Calendario:** vistas de mes, semana y día, con tareas y clases. Arrastra una tarea a otro día u otra hora; toca un hueco para crear una.
@@ -48,6 +53,14 @@ En el celular puedes instalarla como app desde el menú del navegador: *Agregar 
 
 Las notas se escriben con coma o punto (`4,5` o `4.5`). Escribir `45` también se entiende como 4,5.
 
+**PA y PAPA** siguen el Estatuto Estudiantil (Acuerdo 008 de 2008):
+- Notas en décimas: las centésimas de 5 o más suben a la décima siguiente.
+- **PA:** la última nota definitiva de cada asignatura, ponderada por créditos.
+- **PAPA:** todas las notas definitivas (incluidas las de materias perdidas y repetidas), ponderadas por créditos.
+- Las materias en curso, las *Aprobado/Reprobado* y las canceladas no entran en ninguno de los dos.
+
+Para trámites, la cifra oficial es la del SIA.
+
 ## Estructura
 
 ```
@@ -55,7 +68,7 @@ index.html
 css/estilos.css
 js/app.js            ← arranque, pestañas, sincronización y ajustes
 js/nucleo.js         ← estado y utilidades compartidas
-js/vistas/           ← pestañas: tareas.js, calendario.js, notas.js
+js/vistas/           ← pestañas: tareas.js, calendario.js, notas.js, historial.js
 js/componentes/      ← editor de tareas y menús flotantes
 js/calculos.js       ← cálculos de notas (probados por separado)
 js/fechas.js         ← fechas en español: "mañana", "viernes 3pm", "15 dic"… (probado)

@@ -723,3 +723,94 @@ dialog .toast { position: fixed; }
   .grilla-bloque { grid-template-columns: 1fr 1fr; }
   .grilla-bloque .materia-campo { grid-column: 1 / -1; }
 }
+
+/* =====================================================================
+   Fase 3 · historial, PA y PAPA
+   ===================================================================== */
+.subvista { margin-bottom: 18px; }
+.resumen.resumen-4 { grid-template-columns: 1.4fr 1fr 1fr 1fr; }
+.nota-proyeccion { font-size: 13px; color: var(--texto-2); margin: -10px 0 18px; max-width: 760px; }
+.vista-historial-pie, #vista-historial > .nota-proyeccion:last-child { margin-top: 18px; color: var(--texto-3); font-size: 12.5px; }
+
+.materia.cancelada { opacity: 0.6; }
+.materia.cancelada h3 { text-decoration: line-through; }
+
+.mas-opciones { border: 1px solid var(--borde); border-radius: var(--radio-chico); padding: 8px 12px; margin-bottom: 12px; }
+.mas-opciones summary { cursor: pointer; font-size: 13.5px; color: var(--texto-2); }
+.mas-opciones[open] summary { margin-bottom: 10px; }
+
+/* Gráfica */
+.grafica-hist { margin: 0 0 24px; background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio); padding: 12px 14px 6px; }
+.grafica-hist figcaption { display: flex; gap: 18px; font-size: 12.5px; color: var(--texto-2); margin-bottom: 4px; flex-wrap: wrap; }
+.leyenda { display: inline-flex; align-items: center; gap: 6px; }
+.muestra-barra { display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: color-mix(in srgb, var(--texto-3) 45%, var(--superficie)); }
+.muestra-linea { display: inline-block; width: 16px; height: 2px; border-radius: 2px; background: var(--acento); position: relative; }
+.muestra-linea::after { content: ""; position: absolute; left: 5px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--acento); }
+.g-contenedor { position: relative; }
+.grafica-hist svg { width: 100%; height: auto; display: block; overflow: visible; }
+.g-grilla { stroke: var(--borde); stroke-width: 1; }
+.g-eje { fill: var(--texto-3); font-size: 11px; font-family: var(--fuente); }
+.g-ref { stroke: var(--texto-3); stroke-width: 1; stroke-dasharray: 4 4; }
+.g-barra { fill: color-mix(in srgb, var(--texto-3) 45%, var(--superficie)); }
+.g-linea { fill: none; stroke: var(--acento); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.g-punto { fill: var(--acento); stroke: var(--superficie); stroke-width: 2; }
+.g-etiqueta { fill: var(--texto); font-size: 11.5px; font-weight: 650; font-family: var(--fuente); }
+.g-zona { fill: transparent; cursor: default; }
+.g-zona.activa { fill: color-mix(in srgb, var(--texto) 5%, transparent); }
+.g-tooltip {
+  position: absolute; top: 4px; pointer-events: none; z-index: 5;
+  background: var(--superficie); border: 1px solid var(--borde); border-radius: 9px; box-shadow: var(--sombra);
+  padding: 8px 10px; font-size: 12.5px; display: flex; flex-direction: column; gap: 2px; min-width: 190px;
+}
+.g-tooltip span { display: flex; align-items: center; gap: 6px; color: var(--texto-2); }
+.g-tooltip span b { margin-left: auto; color: var(--texto); }
+.g-tooltip .sutil { color: var(--texto-3); font-size: 11.5px; }
+
+/* Semestres */
+.lista-semestres { display: flex; flex-direction: column; gap: 12px; }
+.periodo { background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; }
+.periodo.actual { border-color: color-mix(in srgb, var(--acento) 45%, var(--borde)); }
+.periodo-cabeza { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 12px 16px; flex-wrap: wrap; }
+.periodo-cabeza h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.periodo-cabeza .meta { font-size: 13px; color: var(--texto-2); margin-top: 2px; }
+.periodo-cabeza .chip-estado { margin-left: 0; font-size: 11.5px; }
+.tabla-scroll { overflow-x: auto; }
+.tabla-hist { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tabla-hist th { text-align: left; font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-3); padding: 6px 16px; border-top: 1px solid var(--borde); }
+.tabla-hist td { padding: 8px 16px; border-top: 1px solid var(--borde); }
+.tabla-hist .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tabla-hist .nota-def { font-weight: 650; }
+.tabla-hist tr.cancelada td:first-child { text-decoration: line-through; color: var(--texto-3); }
+.punto-materia { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+.codigo { color: var(--texto-3); font-size: 12px; }
+.etiqueta-mini { font-size: 11px; background: var(--superficie-2); color: var(--texto-2); padding: 1px 6px; border-radius: 5px; }
+.estado-mini { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.estado-mini::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: var(--sin-notas); }
+.estado-mini[data-estado="aprobada"] { color: var(--bien); }
+.estado-mini[data-estado="aprobada"]::before { background: var(--bien); }
+.estado-mini[data-estado="reprobada"] { color: var(--riesgo); }
+.estado-mini[data-estado="reprobada"]::before { background: var(--riesgo); }
+.estado-mini[data-estado="en-curso"], .estado-mini[data-estado="cancelada"] { color: var(--texto-2); }
+
+/* Agregar semestre anterior */
+.fila-anterior { display: grid; grid-template-columns: 1fr 90px 58px 120px 62px 28px; gap: 4px; align-items: center; margin-bottom: 4px; }
+.fila-anterior.encabezado { font-size: 11.5px; color: var(--texto-3); text-transform: uppercase; letter-spacing: 0.04em; padding: 0 4px; }
+.fila-anterior .campo-celda { background: var(--fondo); border-color: var(--borde); }
+.fila-anterior .campo-celda:disabled { opacity: 0.4; }
+.fila-anterior select.campo-celda { padding: 6px 4px; }
+
+@media (max-width: 760px) {
+  .resumen.resumen-4 { grid-template-columns: 1fr 1fr 1fr; }
+  .resumen.resumen-4 .destacada { grid-column: 1 / -1; }
+  .subvista { display: flex; }
+  .subvista button { flex: 1; }
+  .tabla-hist th, .tabla-hist td { padding: 7px 10px; }
+  .periodo-cabeza .botones-fila { width: 100%; }
+  .fila-anterior { grid-template-columns: 1fr 70px 50px 28px; }
+  .fila-anterior.encabezado { display: none; }
+  .fila-anterior [data-f=nombre] { grid-column: 1 / 2; }
+  .fila-anterior [data-f=tipo] { grid-column: 1 / 3; }
+  .fila-anterior [data-f=nota] { grid-column: 3 / 4; }
+  .fila-anterior { border-bottom: 1px solid var(--borde); padding-bottom: 6px; margin-bottom: 6px; }
+}
+.muestra-ref { display: inline-block; width: 16px; border-top: 1.5px dashed var(--texto-3); }

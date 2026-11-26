@@ -13,7 +13,7 @@ export function aRegistros(d) {
   const a = d.ajustes || {};
   r.push({ col: 'ajustes', id: 'general', notaAprobacion: a.notaAprobacion, tema: a.tema, paleta: a.paleta });
   (d.semestres || []).forEach((s, i) => {
-    r.push({ col: 'semestres', id: s.id, nombre: s.nombre, creado: s.creado, orden: i });
+    r.push({ ...sin(s, 'id', 'materias', 'horario'), col: 'semestres', id: s.id, orden: i });
     (s.materias || []).forEach((m, j) => r.push({ ...sin(m, 'id'), col: 'materias', id: m.id, semestreId: s.id, orden: j }));
     (s.horario || []).forEach((b) => r.push({ ...sin(b, 'id'), col: 'horario', id: b.id, semestreId: s.id }));
   });

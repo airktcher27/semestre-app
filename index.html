@@ -79,6 +79,13 @@
 
     <!-- Notas -->
     <section id="vista-notas" class="vista oculto">
+      <div class="segmentado subvista" id="subvista-notas">
+        <button type="button" data-sub="semestre">Este semestre</button>
+        <button type="button" data-sub="historial">Historial y PAPA</button>
+      </div>
+      <div id="vista-historial" class="oculto"></div>
+      <div id="vista-semestre">
+      <div id="aviso-archivado"></div>
       <section id="resumen" class="resumen" aria-label="Resumen del semestre"></section>
       <div class="encabezado-seccion">
         <h2>Materias</h2>
@@ -87,6 +94,7 @@
         <button id="boton-nueva-materia" class="boton primario" data-accion="nueva-materia">+ Materia</button>
       </div>
       <section id="materias" class="materias"></section>
+      </div>
     </section>
   </main>
 
@@ -108,6 +116,21 @@
           <label class="campo"><span>Código (opcional)</span><input type="text" name="codigo" maxlength="20" autocomplete="off"></label>
         </div>
         <div class="campo"><span>Color</span><div class="colores" id="colores-materia"></div></div>
+        <details class="mas-opciones" id="opciones-definitiva">
+          <summary>Nota definitiva y estado</summary>
+          <div class="fila-campos">
+            <label class="campo"><span>Cómo se califica</span><select name="calificacion">
+              <option value="numerica">Con nota (0 a 5)</option>
+              <option value="ap">Aprobado / Reprobado</option>
+            </select></label>
+            <label class="campo" data-solo="numerica"><span>Nota final (opcional)</span><input type="text" name="notaFinal" inputmode="decimal" placeholder="La calculo con los trabajos" autocomplete="off"></label>
+            <label class="campo oculto" data-solo="ap"><span>Resultado</span><select name="aprobada">
+              <option value="">Aún no</option><option value="si">Aprobada</option><option value="no">Reprobada</option>
+            </select></label>
+          </div>
+          <label class="casilla"><input type="checkbox" name="cancelada"> La cancelé (no cuenta en créditos ni promedios)</label>
+          <p class="ayuda" style="font-size:12.5px;color:var(--texto-3);margin:0">Si escribes la nota final (la del SIA), esa manda sobre la calculada con los trabajos.</p>
+        </details>
         <p class="error-form" id="error-materia"></p>
       </div>
       <div class="dialogo-pie">
@@ -236,6 +259,26 @@
       <div class="dialogo-pie">
         <button type="button" class="boton" data-cerrar>Ahora no</button>
         <button type="submit" class="boton primario" value="ok">Continuar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Semestre anterior -->
+  <dialog id="dialogo-anterior" class="dialogo-ancho">
+    <form method="dialog" id="form-anterior">
+      <div class="dialogo-cuerpo">
+        <h2>Agregar un semestre anterior</h2>
+        <p class="info-sync">Para que el PAPA y el PA salgan completos. Copia las notas definitivas de tu historia académica del SIA.</p>
+        <label class="campo" style="max-width:220px"><span>Semestre</span><input type="text" name="nombre" placeholder="2025-2" required autocomplete="off"></label>
+        <div class="fila-anterior encabezado"><span>Materia</span><span>Código</span><span>Créd.</span><span>Tipo</span><span>Nota</span><span></span></div>
+        <div id="filas-anterior"></div>
+        <button type="button" class="agregar-trabajo" id="boton-otra-fila"><span class="mas">+</span> Otra materia</button>
+        <p class="ayuda" style="font-size:12.5px;color:var(--texto-3)">Con el código, si repetiste una materia la reconozco y en el PA cuento solo la última nota.</p>
+        <p class="error-form" id="error-anterior"></p>
+      </div>
+      <div class="dialogo-pie">
+        <button type="button" class="boton" data-cerrar>Cancelar</button>
+        <button type="submit" class="boton primario" value="ok">Guardar semestre</button>
       </div>
     </form>
   </dialog>
