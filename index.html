@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="es" data-tema="oscuro" data-paleta="tomate">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Semestre</title>
+  <meta name="theme-color" content="#1e1e1e">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="img/icono.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/icono-192.png">
+  <script>
+    // Aplica el tema antes de pintar para que no parpadee.
+    try {
+      const a = JSON.parse(localStorage.getItem("semestre:apariencia") || "{}");
+      const tema = a.tema === "claro" || a.tema === "oscuro" ? a.tema
+        : (matchMedia("(prefers-color-scheme: light)").matches ? "claro" : "oscuro");
+      document.documentElement.dataset.tema = tema;
+      if (a.paleta) document.documentElement.dataset.paleta = a.paleta;
+    } catch {}
+  </script>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <header class="barra">
+    <div class="marca"><span class="marca-icono" aria-hidden="true">✓</span><span>Semestre</span></div>
+    <select id="selector-semestre" class="selector-semestre" aria-label="Semestre"></select>
+    <div class="espaciador"></div>
+    <button id="boton-sync" class="boton fantasma estado-sync" data-estado="sin-configurar" title="Sincronización">
+      <span class="punto"></span><span class="texto">Sin conectar</span>
+    </button>
+    <button id="boton-ajustes" class="boton boton-icono" title="Ajustes" aria-label="Ajustes">⚙︎</button>
+  </header>
+
+  <main>
+    <div id="avisos"></div>
+
+    <section id="resumen" class="resumen" aria-label="Resumen del semestre"></section>
+
+    <div class="encabezado-seccion">
+      <h2>Materias</h2>
+      <span id="contador-materias" class="contador"></span>
+      <div class="espaciador"></div>
+      <button id="boton-nueva-materia" class="boton primario" data-accion="nueva-materia">+ Materia</button>
+    </div>
+    <section id="materias" class="materias"></section>
+  </main>
+
+  <!-- Materia -->
+  <dialog id="dialogo-materia">
+    <form method="dialog" id="form-materia">
+      <div class="dialogo-cuerpo">
+        <h2 id="titulo-materia">Nueva materia</h2>
+        <label class="campo"><span>Nombre</span><input type="text" name="nombre" required maxlength="90" autocomplete="off"></label>
+        <label class="campo"><span>Docente (opcional)</span><input type="text" name="docente" maxlength="90" autocomplete="off"></label>
+        <div class="fila-campos">
+          <label class="campo"><span>Créditos</span><input type="number" name="creditos" min="1" max="20" step="1" required inputmode="numeric"></label>
+          <label class="campo"><span>Código (opcional)</span><input type="text" name="codigo" maxlength="20" autocomplete="off"></label>
+        </div>
+        <div class="campo"><span>Color</span><div class="colores" id="colores-materia"></div></div>
+        <p class="error-form" id="error-materia"></p>
+      </div>
+      <div class="dialogo-pie">
+        <button type="button" class="boton peligro izquierda oculto" id="boton-borrar-materia">Borrar</button>
+        <button type="button" class="boton" data-cerrar>Cancelar</button>
+        <button type="submit" class="boton primario" value="ok">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Semestre -->
+  <dialog id="dialogo-semestre">
+    <form method="dialog" id="form-semestre">
+      <div class="dialogo-cuerpo">
+        <h2 id="titulo-semestre">Nuevo semestre</h2>
+        <label class="campo"><span>Nombre</span><input type="text" name="nombre" required maxlength="40" placeholder="2026-2" autocomplete="off"></label>
+        <label class="casilla oculto" id="copiar-materias-casilla"><input type="checkbox" name="copiar"> Copiar las materias del semestre actual (sin notas)</label>
+        <p class="error-form" id="error-semestre"></p>
+      </div>
+      <div class="dialogo-pie">
+        <button type="button" class="boton peligro izquierda oculto" id="boton-borrar-semestre">Borrar semestre</button>
+        <button type="button" class="boton" data-cerrar>Cancelar</button>
+        <button type="submit" class="boton primario" value="ok">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Ajustes -->
+  <dialog id="dialogo-ajustes">
+    <div class="dialogo-cuerpo">
+      <h2>Ajustes</h2>
+
+      <div class="ajustes-seccion">
+        <h3>Tema</h3>
+        <div class="segmentado" id="opciones-tema">
+          <button type="button" data-tema="auto">Automático</button>
+          <button type="button" data-tema="claro">Claro</button>
+          <button type="button" data-tema="oscuro">Oscuro</button>
+        </div>
+      </div>
+
+      <div class="ajustes-seccion">
+        <h3>Paleta</h3>
+        <div class="paletas" id="opciones-paleta"></div>
+      </div>
+
+      <div class="ajustes-seccion">
+        <h3>Notas</h3>
+        <label class="campo" style="max-width:220px"><span>Nota para aprobar</span>
+          <input type="text" id="nota-aprobacion" inputmode="decimal">
+          <div class="ayuda">Solo cambia los colores de las tarjetas.</div>
+        </label>
+      </div>
+
+      <div class="ajustes-seccion">
+        <h3>Semestre</h3>
+        <div class="botones-fila">
+          <button type="button" class="boton" id="boton-renombrar-semestre">Renombrar o borrar el actual</button>
+          <button type="button" class="boton" id="boton-nuevo-semestre">+ Nuevo semestre</button>
+        </div>
+      </div>
+
+      <div class="ajustes-seccion">
+        <h3>Sincronización</h3>
+        <p class="info-sync" id="info-sync"></p>
+        <div class="botones-fila" id="botones-sync"></div>
+      </div>
+
+      <div class="ajustes-seccion">
+        <h3>Respaldo</h3>
+        <div class="botones-fila">
+          <button type="button" class="boton" id="boton-exportar">Descargar respaldo (.json)</button>
+          <label class="boton">Restaurar respaldo<input type="file" id="archivo-importar" accept=".json,application/json" hidden></label>
+        </div>
+      </div>
+      <p class="ayuda" style="color:var(--texto-3);font-size:12px;margin:0">Semestre · versión <span id="version"></span></p>
+    </div>
+    <div class="dialogo-pie"><button type="button" class="boton primario" data-cerrar>Listo</button></div>
+  </dialog>
+
+  <!-- Conectar con GitHub -->
+  <dialog id="dialogo-conectar">
+    <form method="dialog" id="form-conectar">
+      <div class="dialogo-cuerpo">
+        <h2>Conectar con GitHub</h2>
+        <div class="fila-campos">
+          <label class="campo"><span>Tu usuario de GitHub</span><input type="text" name="usuario" required autocomplete="username" autocapitalize="off" spellcheck="false"></label>
+          <label class="campo"><span>Repo de datos (privado)</span><input type="text" name="repo" required value="semestre-datos" autocapitalize="off" spellcheck="false"></label>
+        </div>
+        <label class="campo"><span>Token (fine-grained)</span><input type="password" name="token" required autocomplete="off" spellcheck="false">
+          <div class="ayuda">Solo con permiso <b>Contents: Read and write</b> sobre el repo de datos.</div></label>
+        <label class="campo"><span>Contraseña de cifrado</span><input type="password" name="contrasena" required minlength="8" autocomplete="new-password">
+          <div class="ayuda">Usa la misma en el PC y en el celular. Si la pierdes, no hay forma de recuperar los datos de GitHub.</div></label>
+        <label class="casilla"><input type="checkbox" name="recordar" checked> Recordar la contraseña en este dispositivo</label>
+        <p class="error-form" id="error-conectar"></p>
+      </div>
+      <div class="dialogo-pie">
+        <button type="button" class="boton" data-cerrar>Cancelar</button>
+        <button type="submit" class="boton primario" value="ok" id="boton-conectar-ok">Conectar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Desbloquear -->
+  <dialog id="dialogo-desbloquear">
+    <form method="dialog" id="form-desbloquear">
+      <div class="dialogo-cuerpo">
+        <h2>Escribe tu contraseña de cifrado</h2>
+        <label class="campo"><span>Contraseña</span><input type="password" name="contrasena" required autocomplete="current-password"></label>
+        <label class="casilla"><input type="checkbox" name="recordar" checked> Recordar en este dispositivo</label>
+        <p class="error-form" id="error-desbloquear"></p>
+      </div>
+      <div class="dialogo-pie">
+        <button type="button" class="boton" data-cerrar>Ahora no</button>
+        <button type="submit" class="boton primario" value="ok">Abrir</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Conflicto -->
+  <dialog id="dialogo-conflicto">
+    <div class="dialogo-cuerpo">
+      <h2>Hay dos versiones distintas</h2>
+      <p>Cambiaste cosas en este dispositivo y, mientras tanto, otro dispositivo subió cambios a GitHub. ¿Cuál conservo?</p>
+      <p class="info-sync" id="detalle-conflicto"></p>
+      <p class="info-sync">La que no elijas se pierde, pero antes descargo una copia de respaldo de este dispositivo por si acaso.</p>
+    </div>
+    <div class="dialogo-pie">
+      <button type="button" class="boton" id="conflicto-remoto">Usar la de GitHub</button>
+      <button type="button" class="boton primario" id="conflicto-local">Usar la de este dispositivo</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
