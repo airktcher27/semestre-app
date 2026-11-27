@@ -1,5 +1,5 @@
 // Permite abrir la app sin internet. Siempre intenta traer la versión nueva primero.
-const CACHE = "semestre-v0.4.0";
+const CACHE = "semestre-v0.4.1";
 const ARCHIVOS = [
   "./", "index.html", "css/estilos.css", "js/app.js", "js/calculos.js",
   "js/comun/sync.js", "js/comun/crypto.js", "js/comun/github.js", "js/comun/merge.js",

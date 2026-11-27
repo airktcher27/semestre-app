@@ -108,12 +108,28 @@ function guardar({ deshacible = false } = {}) {
 }
 
 // ---------- apariencia ----------
+// El tema es de cada dispositivo (p. ej. Negro en el celular y Claro en el PC); la paleta sí se sincroniza.
+// "negro" es el oscuro con fondo negro puro, para pantallas OLED: usa data-tema="oscuro" + data-negro.
+const K_TEMA = "semestre:tema";
+const TEMAS = ["auto", "claro", "oscuro", "negro"];
+function temaDispositivo() {
+  try {
+    const t = localStorage.getItem(K_TEMA);
+    if (TEMAS.includes(t)) return t;
+  } catch {}
+  const t = estado.datos.ajustes.tema; // el que venía sincronizado de versiones anteriores
+  return TEMAS.includes(t) ? t : "auto";
+}
 function aplicarApariencia() {
-  const { tema, paleta } = estado.datos.ajustes;
-  const real = tema === "claro" || tema === "oscuro" ? tema : matchMedia("(prefers-color-scheme: light)").matches ? "claro" : "oscuro";
-  document.documentElement.dataset.tema = real;
-  document.documentElement.dataset.paleta = paleta;
-  $('meta[name="theme-color"]').setAttribute("content", real === "claro" ? "#f6f6f4" : "#1e1e1e");
+  const { paleta } = estado.datos.ajustes;
+  const tema = temaDispositivo();
+  const real = tema === "claro" ? "claro" : tema === "oscuro" || tema === "negro" ? "oscuro"
+    : matchMedia("(prefers-color-scheme: light)").matches ? "claro" : "oscuro";
+  const raiz = document.documentElement;
+  raiz.dataset.tema = real;
+  raiz.toggleAttribute("data-negro", tema === "negro");
+  raiz.dataset.paleta = paleta;
+  $('meta[name="theme-color"]').setAttribute("content", tema === "negro" ? "#000000" : real === "claro" ? "#f6f6f4" : "#1e1e1e");
   try { localStorage.setItem("semestre:apariencia", JSON.stringify({ tema, paleta })); } catch {}
 }
 matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => estado.datos && aplicarApariencia());
@@ -350,7 +366,7 @@ function abrirAjustes() {
 
 function pintarAjustesApariencia() {
   const a = estado.datos.ajustes;
-  for (const b of $("#opciones-tema").children) b.setAttribute("aria-pressed", String(b.dataset.tema === a.tema));
+  for (const b of $("#opciones-tema").children) b.setAttribute("aria-pressed", String(b.dataset.tema === temaDispositivo()));
   $("#opciones-paleta").innerHTML = PALETAS.map(
     (p) => `<button type="button" class="paleta-opcion" data-paleta="${p.id}" aria-pressed="${p.id === a.paleta}">
       <span class="muestra" style="background:${p.color}"></span>${p.nombre}</button>`
@@ -372,10 +388,9 @@ function pintarAjustesNotificaciones() {
 $("#opciones-tema").addEventListener("click", (e) => {
   const b = e.target.closest("[data-tema]");
   if (!b) return;
-  estado.datos.ajustes.tema = b.dataset.tema;
+  try { localStorage.setItem(K_TEMA, b.dataset.tema); } catch {}
   aplicarApariencia();
   pintarAjustesApariencia();
-  guardar();
 });
 
 $("#opciones-paleta").addEventListener("click", (e) => {

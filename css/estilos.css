@@ -1,5 +1,5 @@
 /* ===== Semestre · estilos ===== */
-/* Tema: data-tema="claro" | "oscuro" en <html>. Paleta: data-paleta en <html>. */
+/* Tema: data-tema="claro" | "oscuro" en <html> (+ data-negro para el Negro). Paleta: data-paleta en <html>. */
 
 :root {
   --radio: 14px;
@@ -38,6 +38,16 @@ html[data-tema="oscuro"] {
   --bien: #46b981;
   --cuidado: #e6ac37;
   --riesgo: #e5675f;
+}
+
+/* Negro: el oscuro con fondo negro puro para pantallas OLED (los píxeles negros se apagan).
+   Usa data-tema="oscuro" + data-negro, así hereda todo lo del oscuro (paletas incluidas). */
+html[data-tema="oscuro"][data-negro] {
+  --fondo: #000000;
+  --superficie: #121212;
+  --superficie-2: #1a1a1a;
+  --borde: #2a2a2a;
+  --sombra: none;
 }
 
 /* Paletas: color de acento de la app */
@@ -814,3 +824,7 @@ dialog .toast { position: fixed; }
   .fila-anterior { border-bottom: 1px solid var(--borde); padding-bottom: 6px; margin-bottom: 6px; }
 }
 .muestra-ref { display: inline-block; width: 16px; border-top: 1.5px dashed var(--texto-3); }
+
+/* Tema: los 4 botones caben en celulares angostos */
+#opciones-tema { display: flex; max-width: 100%; }
+#opciones-tema button { flex: 1 1 auto; padding-left: 8px; padding-right: 8px; white-space: nowrap; }

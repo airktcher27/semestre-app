@@ -9,13 +9,17 @@
   <link rel="icon" href="img/icono.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="img/icono-192.png">
   <script>
-    // Aplica el tema antes de pintar para que no parpadee.
+    // Aplica el tema antes de pintar para que no parpadee. "negro" es el oscuro con fondo negro puro (OLED).
     try {
       const a = JSON.parse(localStorage.getItem("semestre:apariencia") || "{}");
-      const tema = a.tema === "claro" || a.tema === "oscuro" ? a.tema
+      const raiz = document.documentElement;
+      raiz.dataset.tema = a.tema === "claro" ? "claro" : a.tema === "oscuro" || a.tema === "negro" ? "oscuro"
         : (matchMedia("(prefers-color-scheme: light)").matches ? "claro" : "oscuro");
-      document.documentElement.dataset.tema = tema;
-      if (a.paleta) document.documentElement.dataset.paleta = a.paleta;
+      if (a.tema === "negro") {
+        raiz.dataset.negro = "";
+        document.querySelector('meta[name="theme-color"]').setAttribute("content", "#000000");
+      }
+      if (a.paleta) raiz.dataset.paleta = a.paleta;
     } catch {}
   </script>
   <link rel="stylesheet" href="css/estilos.css">
@@ -169,6 +173,7 @@
           <button type="button" data-tema="auto">Automático</button>
           <button type="button" data-tema="claro">Claro</button>
           <button type="button" data-tema="oscuro">Oscuro</button>
+          <button type="button" data-tema="negro">Negro</button>
         </div>
       </div>
 
