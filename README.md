@@ -3,7 +3,7 @@
 App web para llevar las materias, las notas y el promedio del semestre (ponderado por créditos).
 Funciona en el PC y en el celular, y se sincroniza cifrada con un repo privado de GitHub, igual que la app de finanzas.
 
-**Versión 0.4.1: las 3 fases completas**, con el módulo común de sincronización (el mismo de *Finanzas*, en `js/comun/`)
+**Versión 0.4.2: las 3 fases completas**, con el módulo común de sincronización (el mismo de *Finanzas*, en `js/comun/`)
 - **Historial y PAPA** (Notas → *Historial y PAPA*): PAPA, PA, créditos aprobados y cursados, promedio de cada periodo y gráfica de su evolución.
   Los semestres anteriores se agregan en bloque copiando las notas definitivas del SIA. Las materias repetidas se reconocen por su código.
 - **Nota definitiva** de cada materia: se calcula sola cuando todos sus trabajos tienen nota, o la escribes tú (la del SIA manda).

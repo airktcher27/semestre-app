@@ -1,5 +1,5 @@
 // Permite abrir la app sin internet. Siempre intenta traer la versión nueva primero.
-const CACHE = "semestre-v0.4.1";
+const CACHE = "semestre-v0.4.2";
 const ARCHIVOS = [
   "./", "index.html", "css/estilos.css", "js/app.js", "js/calculos.js",
   "js/comun/sync.js", "js/comun/crypto.js", "js/comun/github.js", "js/comun/merge.js",
@@ -14,9 +14,10 @@ self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));
 });
 
+// Todas tus apps comparten el mismo origen (airktcher27.github.io): solo se borran las cachés viejas de ESTA app.
 self.addEventListener("activate", (e) => {
   e.waitUntil(
-    caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())
+    caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE && k.startsWith("semestre-")).map((k) => caches.delete(k)))).then(() => self.clients.claim())
   );
 });
 
